@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Worker Monitor</title>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary: #2563eb;
+        --primary-dark: #1d4ed8;
+        --success: #22c55e;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --background: #f8fafc;
+        --text: #1e293b;
+        --border: #e2e8f0;
+      }
+
+      * {
+        box-sizing: border-box;
+        transition: all 0.2s ease;
+      }
+
+      body {
+        font-family: "Inter", -apple-system, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: var(--background);
+        color: var(--text);
+        line-height: 1.5;
+      }
+
+      .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding: 1rem;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+      }
+
+      .stat-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .stat-icon {
+        font-size: 1.5rem;
+        padding: 1rem;
+        border-radius: 50%;
+        background: var(--primary);
+        color: white;
+      }
+
+      .stat-info h3 {
+        margin: 0;
+        font-size: 0.875rem;
+        color: #64748b;
+      }
+
+      .stat-info p {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 600;
+      }
+
+      .action-bar {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        background-color: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+
+      .button:hover {
+        background-color: var(--primary-dark);
+        transform: translateY(-1px);
+      }
+
+      .button.danger {
+        background-color: var(--danger);
+      }
+
+      .button.warning {
+        background-color: var(--warning);
+      }
+
+      .button.success {
+        background-color: var(--success);
+      }
+
+      table {
+        width: 100%;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-bottom: 2rem;
+      }
+
+      th {
+        background-color: #f8fafc;
+        color: #64748b;
+        font-weight: 500;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.05em;
+      }
+
+      th,
+      td {
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 500;
+      }
+
+      .status.done {
+        background-color: #dcfce7;
+        color: var(--success);
+      }
+
+      .status.not-done {
+        background-color: #fee2e2;
+        color: var(--danger);
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+      }
+
+      .status-active {
+        background-color: var(--success);
+        box-shadow: 0 0 0 4px #dcfce7;
+      }
+
+      .status-inactive {
+        background-color: var(--danger);
+        box-shadow: 0 0 0 4px #fee2e2;
+      }
+
+      .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-top: 2rem;
+      }
+
+      .pagination button {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border);
+        background: white;
+        color: var(--text);
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      .pagination button.active {
+        background-color: var(--primary);
+        color: white;
+        border-color: var(--primary);
+      }
+
+      .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      .animate-pulse {
+        animation: pulse 2s infinite;
+      }
+
+      @media (max-width: 768px) {
+        .stats-container {
+          grid-template-columns: 1fr;
+        }
+
+        .action-bar {
+          flex-direction: column;
+        }
+
+        .button {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dashboard-header">
+      <h1>
+        Worker Monitor
+        <span
+          id="updateStatus"
+          class="status-indicator status-active"
+          title="Auto-update status"
+        ></span>
+      </h1>
+      <div id="clock" style="font-size: 1.25rem; font-weight: 500"></div>
+    </div>
+
+    <div class="stats-container">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-play"></i>
+        </div>
+        <div class="stat-info">
+          <h3>Active Workers</h3>
+          <p id="activeWorkers"><%= activeWorkers %></p>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-tasks"></i>
+        </div>
+        <div class="stat-info">
+          <h3>Total Workers</h3>
+          <p id="totalWorkers"><%= totalWorkers %></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button class="button success" onclick="createWorker()">
+        <i class="fas fa-plus"></i> Create Worker
+      </button>
+      <button class="button warning" onclick="pauseSpawning()">
+        <i class="fas fa-pause"></i> Pause Spawning
+      </button>
+      <button class="button" onclick="unpauseSpawning()">
+        <i class="fas fa-play"></i> Unpause Spawning
+      </button>
+      <button class="button" onclick="toggleAutoUpdate()" id="autoUpdateBtn">
+        <i class="fas fa-sync"></i> Pause Auto-Update
+      </button>
+    </div>
+
+    <div id="workersSection">
+      <div class="section-header">
+        <h2><i class="fas fa-microchip"></i> Active Workers</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>PID</th>
+            <th>Start Time</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="workerTable">
+          <% const sortedWorkers = workers.sort((a, b) => a.isDone - b.isDone);
+          %> <% workers.forEach(worker => { %>
+          <tr
+            class="worker-row"
+            data-page="<%= Math.ceil((sortedWorkers.indexOf(worker) + 1) / itemsPerPage) %>"
+          >
+            <td><i class="fas fa-microchip"></i> <%= worker.pid %></td>
+            <td>
+              <i class="far fa-clock"></i> <%= new
+              Date(worker.startTime).toLocaleString() %>
+            </td>
+            <td>
+              <span class="status <%= worker.isDone ? 'done' : 'not-done' %>">
+                <i
+                  class="fas <%= worker.isDone ? 'fa-check' : 'fa-spinner fa-spin' %>"
+                ></i>
+                <%= worker.isDone ? 'Done' : 'In Progress' %>
+              </span>
+            </td>
+            <td><i class="fas fa-layer-group"></i> <%= worker.priority %></td>
+            <td>
+              <% if (!worker.isDone) { %>
+              <button
+                class="button danger"
+                onclick="stopWorker(<%= worker.pid %>)"
+              >
+                <i class="fas fa-stop"></i> Stop
+              </button>
+              <% } %>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <div class="pagination" id="workerPagination">
+        <% for (let i = 1; i <= Math.ceil(workers.length / itemsPerPage); i++) {
+        %>
+        <button
+          onclick="changePage('worker', <%= i %>)"
+          class="<%= currentPage === i ? 'active' : '' %>"
+        >
+          <%= i %>
+        </button>
+        <% } %>
+      </div>
+    </div>
+
+    <div id="historySection">
+      <div class="section-header">
+        <h2><i class="fas fa-history"></i> Worker History</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>PID</th>
+            <th>Start Time</th>
+            <th>End Time</th>
+            <th>Priority</th>
+          </tr>
+        </thead>
+        <tbody id="historyTable">
+          <% history.forEach(record => { %>
+          <tr
+            class="history-row"
+            data-page="<%= Math.ceil((history.indexOf(record) + 1) / itemsPerPage) %>"
+          >
+            <td><i class="fas fa-microchip"></i> <%= record.pid %></td>
+            <td>
+              <i class="far fa-clock"></i> <%= new
+              Date(record.startTime).toLocaleString() %>
+            </td>
+            <td>
+              <i class="far fa-clock"></i> <%= new
+              Date(record.endTime).toLocaleString() %>
+            </td>
+            <td><i class="fas fa-layer-group"></i> <%= record.priority %></td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <div class="pagination" id="historyPagination">
+        <% for (let i = 1; i <= Math.ceil(history.length / itemsPerPage); i++) {
+        %>
+        <button
+          onclick="changePage('history', <%= i %>)"
+          class="<%= historyPage === i ? 'active' : '' %>"
+        >
+          <%= i %>
+        </button>
+        <% } %>
+      </div>
+    </div>
+
+    <script>
+      let state = {
+        currentWorkerPage: <%= currentPage %>,
+        currentHistoryPage: <%= historyPage %>,
+        itemsPerPage: <%= itemsPerPage %>,
+        autoUpdateEnabled: true,
+        updateInterval: null
+      };
+
+      function updateClock() {
+        const now = new Date();
+        document.getElementById('clock').textContent = now.toLocaleTimeString();
+      }
+
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      function startAutoUpdate() {
+        if (state.updateInterval) {
+          clearInterval(state.updateInterval);
+        }
+
+        state.updateInterval = setInterval(() => {
+          if (state.autoUpdateEnabled) {
+            fetchLatestData();
+          }
+        }, 2000);
+      }
+
+      function fetchLatestData() {
+        fetch('/')
+          .then(response => response.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            const data = {
+              activeWorkers: doc.getElementById('activeWorkers').textContent,
+              totalWorkers: doc.getElementById('totalWorkers').textContent,
+              workers: Array.from(doc.querySelectorAll('#workerTable tr')).map(row => ({
+                pid: row.cells[0].textContent.trim(),
+                startTime: new Date(row.cells[1].textContent),
+                isDone: row.cells[2].querySelector('.status').classList.contains('done'),
+                priority: row.cells[3].textContent.trim()
+              })),
+              history: Array.from(doc.querySelectorAll('#historyTable tr')).map(row => ({
+                pid: row.cells[0].textContent.trim(),
+                startTime: new Date(row.cells[1].textContent),
+                endTime: new Date(row.cells[2].textContent),
+                priority: row.cells[3].textContent.trim()
+              }))
+            };
+
+            updatePage(data);
+          })
+          .catch(error => {
+            console.error('Error fetching updates:', error);
+            document.getElementById('updateStatus').classList.replace('status-active', 'status-inactive');
+          });
+      }
+
+      function toggleAutoUpdate() {
+        state.autoUpdateEnabled = !state.autoUpdateEnabled;
+        const btn = document.getElementById('autoUpdateBtn');
+        const indicator = document.getElementById('updateStatus');
+
+        if (state.autoUpdateEnabled) {
+          btn.innerHTML = '<i class="fas fa-sync"></i> Pause Auto-Update';
+          indicator.classList.replace('status-inactive', 'status-active');
+        } else {
+          btn.innerHTML = '<i class="fas fa-sync"></i> Resume Auto-Update';
+          indicator.classList.replace('status-active', 'status-inactive');
+        }
+      }
+
+      function changePage(section, page) {
+        if (section === 'worker') {
+          state.currentWorkerPage = page;
+          document.querySelectorAll('.worker-row').forEach(row => {
+            row.style.display = row.dataset.page == page ? '' : 'none';
+          });
+          document.querySelectorAll('#workerPagination button').forEach((btn, index) => {
+            btn.classList.toggle('active', index + 1 === page);
+          });
+        } else {
+          state.currentHistoryPage = page;
+          document.querySelectorAll('.history-row').forEach(row => {
+            row.style.display = row.dataset.page == page ? '' : 'none';
+          });
+          document.querySelectorAll('#historyPagination button').forEach((btn, index) => {
+            btn.classList.toggle('active', index + 1 === page);
+          });
+        }
+      }
+
+      window.addEventListener('load', () => {
+        changePage('worker', state.currentWorkerPage);
+        changePage('history', state.currentHistoryPage);
+        startAutoUpdate();
+      });
+
+      function createWorker() {
+        fetch("/create-worker", { method: "POST" })
+          .then(response => response.json())
+          .then(data => updatePage(data))
+          .catch(error => console.error("Error creating worker:", error));
+      }
+
+      function stopWorker(pid) {
+        fetch(`/stop-worker/${pid}`, { method: "POST" })
+          .then(response => response.json())
+          .then(data => updatePage(data))
+          .catch(error => console.error("Error stopping worker:", error));
+      }
+
+      function pauseSpawning() {
+        fetch("/pause-spawning", { method: "POST" })
+          .then(response => response.json())
+          .then(data => console.log(data.status))
+          .catch(error => console.error("Error pausing spawning:", error));
+      }
+
+      function unpauseSpawning() {
+        fetch("/unpause-spawning", { method: "POST" })
+          .then(response => response.json())
+          .then(data => console.log(data.status))
+          .catch(error => console.error("Error unpausing spawning:", error));
+      }
+
+      function updatePage(data) {
+        document.getElementById("activeWorkers").innerText = data.activeWorkers;
+        document.getElementById("totalWorkers").innerText = data.totalWorkers;
+        document.getElementById('updateStatus').classList.replace('status-inactive', 'status-active');
+
+        const workerTable = document.getElementById("workerTable");
+        workerTable.innerHTML = "";
+
+        data.workers.forEach((worker, index) => {
+          const page = Math.ceil((index + 1) / state.itemsPerPage);
+          const row = document.createElement("tr");
+          row.className = "worker-row";
+          row.dataset.page = page;
+          row.style.display = page === state.currentWorkerPage ? '' : 'none';
+
+          row.innerHTML = `
+            <td>${worker.pid}</td>
+            <td>${new Date(worker.startTime).toLocaleString()}</td>
+            <td><span class="status ${worker.isDone ? "done" : "not-done"}">${worker.isDone ? "Done" : "In Progress"}</span></td>
+            <td>${worker.priority}</td>
+            <td>${!worker.isDone ? `<button class="button" onclick="stopWorker(${worker.pid})">Stop</button>` : ""}</td>
+          `;
+          workerTable.appendChild(row);
+        });
+
+        const historyTable = document.getElementById("historyTable");
+        historyTable.innerHTML = "";
+
+        data.history.forEach((record, index) => {
+          const page = Math.ceil((index + 1) / state.itemsPerPage);
+          const row = document.createElement("tr");
+          row.className = "history-row";
+          row.dataset.page = page;
+          row.style.display = page === state.currentHistoryPage ? '' : 'none';
+
+          row.innerHTML = `
+            <td>${record.pid}</td>
+            <td>${new Date(record.startTime).toLocaleString()}</td>
+            <td>${new Date(record.endTime).toLocaleString()}</td>
+            <td>${record.priority}</td>
+          `;
+          historyTable.appendChild(row);
+        });
+
+        updatePagination('worker', data.workers.length);
+        updatePagination('history', data.history.length);
+      }
+
+      function updatePagination(section, totalItems) {
+        const paginationContainer = document.getElementById(`${section}Pagination`);
+        const pageCount = Math.ceil(totalItems / state.itemsPerPage);
+
+        paginationContainer.innerHTML = '';
+        for (let i = 1; i <= pageCount; i++) {
+          const button = document.createElement('button');
+          button.innerText = i;
+          button.onclick = () => changePage(section, i);
+          button.classList.toggle('active',
+            (section === 'worker' && i === state.currentWorkerPage) ||
+            (section === 'history' && i === state.currentHistoryPage)
+          );
+          paginationContainer.appendChild(button);
+        }
+      }
+      window.addEventListener('load', () => {
+        changePage('worker', state.currentWorkerPage);
+        changePage('history', state.currentHistoryPage);
+        startAutoUpdate();
+      });
+    </script>
+  </body>
+</html>
