@@ -2,6 +2,7 @@ const fastify = require("fastify")({ logger: true });
 const { fork } = require("child_process");
 const path = require("path");
 const HistoryManager = require("./historyManager");
+const os = require("os");
 
 // Register @fastify/view for templating
 fastify.register(require("@fastify/view"), {
@@ -10,6 +11,12 @@ fastify.register(require("@fastify/view"), {
   },
   root: path.join(__dirname, "views"),
 });
+const routes = require("./routes");
+
+const { doWork } = require('./child')
+
+
+
 
 // Configuration constants
 let config = {
@@ -24,24 +31,6 @@ let historyManager;
 
 // Decide if we're running in parent or child mode
 if (process.argv[2] === "child") {
-  // CHILD LOGIC: Simulate a job that might get stuck
-  const startTime = Date.now();
-
-  const doWork = () => {
-    let progress = 0;
-    const endTime = Date.now() + Math.floor(Math.random() * 5000) + 2000; // up to 7s
-
-    while (Date.now() < endTime) {
-      progress++;
-    }
-
-    process.send({
-      event: "done",
-      result: `Worker PID ${process.pid} completed in ~${
-        Date.now() - startTime
-      }ms.`,
-    });
-  };
 
   doWork();
 } else {
@@ -49,6 +38,7 @@ if (process.argv[2] === "child") {
 
   // Initialize history manager
   historyManager = new HistoryManager("worker-history.json");
+
 
   function spawnWorker(priority = 1) {
     if (isSpawningPaused) {
@@ -116,89 +106,31 @@ if (process.argv[2] === "child") {
     });
   }, config.checkInterval);
 
-  fastify.get("/", (request, reply) => {
-    const currentPage = parseInt(request.query.page) || 1;
-    const historyPage = parseInt(request.query.historyPage) || 1;
-    const itemsPerPage = 10; // Number of items per page
-
-    return reply.view("monitor.ejs", {
-      workers: WORKERS,
-      activeWorkers: WORKERS.filter((w) => !w.isDone).length,
-      totalWorkers: WORKERS.length,
-      history: historyManager.getHistory(),
-      currentPage,
-      historyPage,
-      itemsPerPage,
-    });
-  });
-
-  fastify.post("/config", async (request, reply) => {
-    const { maxMemoryUsage, maxJobDuration, checkInterval } = request.body;
-    if (maxMemoryUsage) config.maxMemoryUsage = maxMemoryUsage;
-    if (maxJobDuration) config.maxJobDuration = maxJobDuration;
-    if (checkInterval) config.checkInterval = checkInterval;
-    return { status: "Configuration updated", config };
-  });
-
-  fastify.post("/create-worker", async (request, reply) => {
-    spawnWorker();
-    return reply.send({
-      activeWorkers: WORKERS.filter((w) => !w.isDone).length,
-      totalWorkers: WORKERS.length,
-      workers: WORKERS,
-      history: historyManager.getHistory(),
-    });
-  });
-
-  fastify.post("/stop-worker/:pid", async (request, reply) => {
-    const pid = parseInt(request.params.pid);
-    const worker = WORKERS.find((w) => w.pid === pid && !w.isDone);
-    if (worker) {
-      worker.child.kill();
-      worker.isDone = true;
-      const historyRecord = {
-        pid: worker.pid,
-        startTime: worker.startTime,
-        endTime: Date.now(),
-        priority: worker.priority,
-      };
-      historyManager.addRecord(historyRecord);
-    }
-    return reply.send({
-      activeWorkers: WORKERS.filter((w) => !w.isDone).length,
-      totalWorkers: WORKERS.length,
-      workers: WORKERS,
-      history: historyManager.getHistory(),
-    });
-  });
-
-  fastify.post("/pause-spawning", async (request, reply) => {
-    isSpawningPaused = true;
-    return reply.send({ status: "Spawning paused" });
-  });
-
-  fastify.post("/unpause-spawning", async (request, reply) => {
-    isSpawningPaused = false;
-    return reply.send({ status: "Spawning unpaused" });
-  });
-
+  
   // Cleanup function to be called on server shutdown
   async function cleanup() {
     fastify.log.info("Server shutting down, cleaning up...");
     await historyManager.cleanup();
     process.exit(0);
   }
-
+  
   // Register cleanup handlers
   process.on("SIGTERM", cleanup);
   process.on("SIGINT", cleanup);
-
+  
+  fastify.register(routes, {
+    WORKERS,
+    historyManager,
+    config,
+    spawnWorker,
+    isSpawningPaused,
+  });
   const start = async () => {
     try {
       // Initialize history manager before starting the server
       await historyManager.initialize();
 
-      await fastify.listen({ port: 3000, host: "0.0.0.0" });
+      await fastify.listen({ port: 9999, host: "0.0.0.0" });
       fastify.log.info("Fastify server is up and running on port 3000");
     } catch (err) {
       fastify.log.error(err);
